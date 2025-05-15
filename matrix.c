@@ -12,11 +12,25 @@ typedef struct Matrix{
     double* matrix; 
 } Matrix;
 
-#define mat_alloc(A, _rows, _columns, arr_name) \
+#define mat_alloc(O, _rows, _columns, arr_name) \
+    O.rows = _rows; \
+    O.columns = _columns; \
+    double arr_name[O.rows * O.columns]; \
+    O.matrix = (double*)arr_name; \
+
+#define mat_alloc_from_matrix(O, A, arr_name) \
+    O.rows = A.rows; \
+    O.columns = A.columns; \
+    double arr_name[A.rows * A.columns]; \
+    O.matrix = arr_name; \
+    for(int i = 0; i < O.rows * O.columns; i++)\
+        O.matrix[i] = A.matrix[i];\
+
+#define mat_alloc_from_arr(A, _rows, _columns, arr) \
     A.rows = _rows; \
     A.columns = _columns; \
-    double arr_name[A.rows * A.columns]; \
-    A.matrix = mat_array; \
+    A.matrix = arr; \
+
 
 #define mat_copy(O, A) \
     mat_alloc(O, A.rows, A.columns) \
@@ -96,7 +110,7 @@ int mat_mul(Matrix* O , Matrix* A, Matrix* B)
                 O->matrix[i* O->columns + j] += A->matrix[i * A->columns + k] * B->matrix[k * B->columns + j];
         }
     }
-    return EXIT_FAILURE; 
+    return EXIT_SUCCESS; 
 }
 
 int mat_haddard(Matrix *O, Matrix* A, Matrix* B)
@@ -114,9 +128,24 @@ int mat_haddard(Matrix *O, Matrix* A, Matrix* B)
     return EXIT_SUCCESS; 
 }
 
+int mat_haddard_inplace(Matrix *O, Matrix* A)
+{
+    if (A->rows != O->rows || A->columns != O->columns)
+    {
+        printf("Cannot scalar multiply A (%d, %d) with O (%d, %d)\n", A->rows, A->columns, O->rows, O->columns);
+        return EXIT_FAILURE;
+    }
+
+    for(int i = 0; i < A->rows; i++)
+        for(int j = 0; j<A->columns; j++)
+            O->matrix[i*O->columns+j] *= A->matrix[i*O->columns+j];
+
+    return EXIT_SUCCESS; 
+}
+
 int mat_add(Matrix*O , Matrix* A, Matrix* B){
     if (A->rows != B->rows || A->columns != B->columns)
-    {
+    {   
         printf("Cannot add (%d, %d) with (%d, %d)\n", A->rows, A->columns, B->rows, B->columns);
         return EXIT_FAILURE;
     }
@@ -277,6 +306,14 @@ int mat_scale(Matrix* O, Matrix* A, double n)
     return EXIT_SUCCESS; 
 }
 
+int mat_scale_in_place(Matrix* O, double n)
+{
+    for(int i = 0; i < O->columns*O->rows; i++)
+        O->matrix[i] = O->matrix[i] * n; 
+
+    return EXIT_SUCCESS; 
+}
+
 int mat_add_scalar(Matrix*O, Matrix* A, double n)
 {
     if (O->rows != A->rows || O->columns != A->columns)
@@ -308,6 +345,6 @@ int mat_normalize_inplace(Matrix* A)
 
     mat_add_scalar(A, A, -mean);
     if (variance != 0)
-        mat_scale(A, A, 1/variance);
+        mat_scale(A, A, 1.0/variance);
 }
 

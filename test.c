@@ -5,13 +5,18 @@ typedef struct HelloWorld
     int* array;
 } HelloWorld; 
 
+
+#define alloc_buffer(array, buffer)\
+    array = buffer; \
+
 int main()
 {
     HelloWorld helloWorld; 
-    helloWorld.array[32];
-    for(int i = 0; i < 32; i++)
-        helloWorld.array[i] = i;
-    
-    for(int i = 0; i < 32; i++)
+    int buffer[] = {1, 2, 4};
+    alloc_buffer(helloWorld.array, buffer); 
+    for(int i = 0; i < 3; i++)
         printf("%d\n", helloWorld.array[i]);
+
+    return 0; 
 }
+

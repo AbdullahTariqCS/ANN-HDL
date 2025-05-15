@@ -9,9 +9,6 @@
 #include "util/for_macro.c"
 
 
-#define DEBUG 0
-#define GRADIENT_PRINT 0
-
 typedef double (*Activation)(double);
 
 typedef struct Model
@@ -28,28 +25,33 @@ typedef struct Model
 } Model;
 
 
-#define alloc_model(model, learning_rate, num_layers, layers) \
-    model->learning_rate = learning_rate; \
-    model->num_layers = num_layers; \
-    model->layers[num_layers+1]; \
-    for(int i =0; i <= num_layers; i++) \
-        model->layers[i] = layers[i]; \
-    Matrix weights[num_layers], bias[num_layers]; \
+#define alloc_model(model, _learning_rate, _num_layers, _layers, _activate, _dactivate, weight_name, bias_name, layer_output_name, layer_error_name) \
+    model.learning_rate = _learning_rate; \
+    model.num_layers = _num_layers; \
+    model.layers = _layers; \
+    Matrix weight_name[_num_layers], bias_name[_num_layers], layer_output_name[_num_layers+1], layer_error_name[_num_layers+1]; \
+    model.weights = weight_name; \
+    model.bias = bias_name; \
+    model.layer_output = layer_output_name; \
+    model.layer_error = layer_error_name; \
+    model.activate = _activate; \
+    model.dactivate = _dactivate; \
 
-#define alloc_model_input_layer(model)\
-    mat_alloc(model->layer_output[0], model->layers[0], 1, layer_output_0); \
-    mat_alloc(model->layer_error[0], model->layers[0], 1, layer_error_0); \
 
-#define alloc_model_layer(model, layer_num, layer_name) \
-    if (layer_num < 1 || layer_num > model->num_layers) \
+#define alloc_model_input_layer(model, output_name, error_name)\
+    mat_alloc(model.layer_output[0], model.layers[0], 1, output_name); \
+    mat_alloc(model.layer_error[0], model.layers[0], 1, error_name); \
+
+#define alloc_model_layer(model, layer_num, weight_name, bias_name, output_name, error_name) \
+    if (layer_num < 1 || layer_num > model.num_layers) \
     {\
-        printf("Cannot allocation layer (%d) where total number of layers are %d\n", layer_num, model->num_layers+1);\
+        printf("Cannot allocation layer (%d) where total number of layers are %d\n", layer_num, model.num_layers+1);\
         exit(EXIT_FAILURE);\
     }\
-    mat_alloc(model->weights[layer_num-1], model->layers[layer_num], model->layers[layer_num-1],layer_name_1)\
-    mat_alloc(model->bias[layer_num-1], model->layers[layer_num], 1, layer_name_2)\
-    mat_alloc(model->layer_output[layer_num], model->layers[layer_num], 1, layer_name_3)\
-    mat_alloc(model->layer_error[layer_num-], model->layers[layer_num], 1, layer_name_4)\
+    mat_alloc(model.weights[layer_num-1], model.layers[layer_num], model.layers[layer_num-1],weight_name)\
+    mat_alloc(model.bias[layer_num-1], model.layers[layer_num], 1, bias_name)\
+    mat_alloc(model.layer_output[layer_num], model.layers[layer_num], 1, output_name)\
+    mat_alloc(model.layer_error[layer_num], model.layers[layer_num], 1, error_name)\
 
 
 #define alloc_model_from_file(model, file)\
@@ -112,17 +114,17 @@ int initialize_model_weights(Model *model)
 
     for (int i = 0; i < model->num_layers; i++)
     {
-        mat_rand_xavier(model->weights[i]);
-        mat_normalize(model->weights[i]);
+        mat_rand_he_inplace(&model->weights[i]);
+        mat_normalize_inplace(&model->weights[i]);
 
         // mat_rand(model->bias[i]);
         // mat_normalize(model->bias[i]);
-        mat_zeros(model->bias[i]);
+        mat_zeros_inplace(&model->bias[i]);
     }
 
     return EXIT_SUCCESS;
 }
-int forward_pass(Matrix* output, Matrix* input, Model* model)
+int forward_pass(Matrix* output, Matrix* input, Model* model, int debug)
 {
     
     // arr_to_mat(&model->layer_output[0], input, model->layers[0]);
@@ -142,10 +144,10 @@ int forward_pass(Matrix* output, Matrix* input, Model* model)
         mat_map_inplace(&model->layer_output[i+1], model->activate);
 
 
-        if (DEBUG)
+        if (debug)
         {
             printf("\ni: %d\n", i);
-            printf("\nFrontier (%d, %d)\n", model->layer_output[i].rows, model->layer_output[i].columns); 
+            printf("\nLayer_output[%d] (%d, %d)\n", i, model->layer_output[i].rows, model->layer_output[i].columns); 
             mat_print(&model->layer_output[i]);
 
             printf("\nWeights[%d] (%d, %d)\n", i, model->weights[i].rows, model->weights[i].columns);
@@ -154,7 +156,7 @@ int forward_pass(Matrix* output, Matrix* input, Model* model)
             printf("\nBias[%d] (%d, %d)\n",i, model->bias[i].rows, model->bias[i].columns);
             mat_print(&model->bias[i]);
 
-            printf("\nfrontier_t: sigmoid(mul(model->weights[%d], frontier) + model->bias[%d])\n", i, i);
+            printf("\nlayer_output[%d]: sigmoid(mul(model->weights[%d], layer_output[%d]) + model->bias[%d])\n", i+1,i, i, i);
             mat_print(&model->layer_output[i+1]);
         }
 
@@ -169,9 +171,10 @@ int forward_pass(Matrix* output, Matrix* input, Model* model)
 }
 
 double backward_pass(
-    Model* output, 
-    Model* input, 
-    Model* model
+    Matrix* output, 
+    Matrix* input, 
+    Model* model,
+    int debug
 ){    
 
     // Matrix* O = arr_to_mat(model->layers[model->num_layers], output, 1);
@@ -183,34 +186,48 @@ double backward_pass(
     mat_copy_vals(&model->layer_output[0], input);
     mat_normalize_inplace(&model->layer_output[0]);
 
-    if (DEBUG)
+    if (debug)
     {
-        printf("\nFrontier[%d]: \n", 0); 
+        printf("\nlayer_output[%d] (input layer): \n", 0); 
         mat_print(&model->layer_output[0]);
 
-        printf("\noutput: \n"); 
+        printf("\nExpected Output: \n"); 
         mat_print(output);
     }
 
     for(int i = 0; i < model->num_layers; i++)
     {
-        // frontier[i+1] = mat_mul(model->weights[i], frontier[i]); 
-        mat_mul(&model->layer_output[i+1], &model->weights[i], &model->layer_output[i]);
-        // mat_add(frontier[i+1], model->bias[i], 1);
-        // mat_map(frontier[i+1], activation, 1);
-        mat_add(&model->layer_output[i+1], &model->layer_output[i+1], &model->bias[i]); 
-        mat_map_inplace(&model->layer_output[i+1], model->activate);
-
-        if (DEBUG)
+        if (debug)
         {
-            printf("\n model->weights[%d]\n", i); 
+            printf("\nmodel->weights[%d]\n", i); 
             mat_print(&model->weights[i]);
 
-            printf("\n model->bias[%d] \n", i); 
+            printf("\nmodel->bias[%d] \n", i); 
             mat_print(&model->bias[i]);
 
-            printf("\nfrontier[%d]: sigmoid(mat_mul(model->weights[%d], frontier[%d]) + model->bias[%d])\n", i+1, i, i, i);
+        }
+        // frontier[i+1] = mat_mul(model->weights[i], frontier[i]); 
+        // mat_add(frontier[i+1], model->bias[i], 1);
+        // mat_map(frontier[i+1], activation, 1);
+        mat_mul(&model->layer_output[i+1], &model->weights[i], &model->layer_output[i]);
+
+        if (debug)
+        {
+            printf("\nlayer_output[%d]: mat_mul(model->weights[%d], frontier[%d])\n", i+1, i, i);
             mat_print(&model->layer_output[i+1]);
+        }
+        mat_add(&model->layer_output[i+1], &model->layer_output[i+1], &model->bias[i]); 
+
+        if (debug)
+        {
+            printf("\nlayer_output[%d]: mat_mul(model->weights[%d], frontier[%d]) + model->bias[%d]\n", i+1, i, i, i);
+            mat_print(&model->layer_output[i+1]);
+        }
+        mat_map_inplace(&model->layer_output[i+1], model->activate);
+
+        if (debug)
+        {
+
         }
     }
 
@@ -220,13 +237,14 @@ double backward_pass(
     // error[model->num_layers] = mat_add(O, neg_frontier, 0); 
     int last = model->num_layers; 
     Matrix neg_layer_output; 
-    mat_alloc(neg_layer_output, model->layer_output[last].rows, model->layer_output[last].columns); 
-    mat_copy_vals(&neg_layer_output, &model->layer_output[last]); 
-    mat_add(&model->layer_error[last], &output, &neg_layer_output);
+    mat_alloc_from_matrix(neg_layer_output, model->layer_output[last], nlo); 
 
-    if (DEBUG)
+    mat_scale(&neg_layer_output, &model->layer_output[last], -1);
+    mat_add(&model->layer_error[last], output, &neg_layer_output);
+
+    if (debug)
     {
-        printf("\n neg_frontier = -frontier[%d: model->num_layers]\n", model->num_layers);
+        printf("\n neg_layer_output = -neg_layer_output[%d: model->num_layers]\n", model->num_layers);
         mat_print(&neg_layer_output);
         printf("error[%d: model->num_layer] = O + neg_frontier\n", model->num_layers); 
         mat_print(&model->layer_error[last]);
@@ -241,7 +259,7 @@ double backward_pass(
         // Matrix* weights_t = mat_transpose(model->weights[i], 0);
         // error[i] = mat_mul(weights_t, error[i+1]);
         Matrix weights_t; 
-        mat_alloc(weights_t, model->weights[i].columns, model->weights[i].rows);
+        mat_alloc(weights_t, model->weights[i].columns, model->weights[i].rows, wt);
         mat_transpose(&weights_t, &model->weights[i]);
         mat_mul(&model->layer_error[i], &weights_t, &model->layer_error[i+1]);
 
@@ -250,32 +268,37 @@ double backward_pass(
         // mat_scalar_mul(gradient, error[i+1], 1);
         // mat_scale(gradient, model->learning_rate, 1);
         Matrix gradient; 
-        mat_alloc(gradient, model->layer_output[i+1].rows, model->layer_output[i+1].columns);
-        mat_map(&gradient, &model->layer_output[i+1], model->activate);
+        mat_alloc_from_matrix(gradient, model->layer_output[i+1], g);
+        mat_map(&gradient, &model->layer_output[i+1], model->dactivate);
+        mat_haddard_inplace(&gradient, &model->layer_error[i+1]);
+        mat_scale_in_place(&gradient, model->learning_rate);
 
         // Matrix* neg_gradient = mat_scale(gradient, -1, 0);
         // mat_add(model->bias[i], gradient, 1);
-        mat_add(&model->bias[i], &model->bias[i], &gradient);
+        Matrix neg_gradient; 
+        mat_alloc_from_matrix(neg_gradient, gradient, ng);
+        mat_scale_in_place(&neg_gradient, -1);
+        mat_add(&model->bias[i], &model->bias[i], &neg_gradient);
 
         // Matrix* frontier_t =  mat_transpose(frontier[i], 0);
         // Matrix* d_weights = mat_mul(gradient, frontier_t);
         Matrix frontier_t, d_weights; 
-        mat_alloc(frontier_t, model->layer_output[i].columns, model->layer_output[i].rows);
-        mat_alloc(d_weights, gradient.rows, frontier_t.columns);
+        mat_alloc(frontier_t, model->layer_output[i].columns, model->layer_output[i].rows, ft);
+        mat_alloc(d_weights, gradient.rows, frontier_t.columns, dw);
 
+        mat_transpose(&frontier_t, &model->layer_output[i]);
+        mat_mul(&d_weights, &gradient, &frontier_t);
+        mat_scale_in_place(&d_weights, -1);
 
         // mat_scale(d_weights, -1, 1);
         // mat_add(model->weights[i], d_weights, 1);
         mat_add(&model->weights[i], &model->weights[i], &d_weights);
 
-        if (GRADIENT_PRINT)
+        if (debug)
         {
             printf("\n");
             mat_print(&gradient);
-        }
-
-        if (DEBUG)
-        {
+        
             printf("\ni : %d\n", i);
             printf("\n weights_t= transpose(model->weights[%d])\n", i);
             mat_print(&weights_t); 
@@ -283,19 +306,14 @@ double backward_pass(
             printf("\n error[%d]\n", i); 
             mat_print(&model->layer_error[i]);
 
-            printf("\nfrontier[%d]\n", i+1); 
+            printf("\nlayer_output[%d]\n", i+1); 
             mat_print(&model->layer_output[i+1]);
 
-            printf("\n gradient = map(frontier[%d], dsigmoid) * errror[%d] * lr: %f\n", i+1, i+1, model->learning_rate); 
+            printf("\n gradient = map(layer_output[%d], dsigmoid) * errror[%d] * lr: %f\n", i+1, i+1, model->learning_rate); 
             mat_print(&gradient);
 
         }
         
-        // mat_free(gradient, 0);
-        // mat_free(frontier_t, 0);
-        // mat_free(weights_t, 0);
-        // mat_free(d_weights, 0);
-        // free(neg_gradient);
     }
     
     double e[model->layer_error[last].rows];
