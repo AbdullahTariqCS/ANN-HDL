@@ -6,7 +6,7 @@ int main(int argc, char* argv[])
     int num_layers = 3; 
     int layers[] = {2, 2, 1};
     double learning_rate = 0.1; 
-    int epochs = 1; 
+    int epochs = 100; 
     int debug = 0; 
 
     if (argc > 1) epochs = atoi(argv[1]);
@@ -21,8 +21,8 @@ int main(int argc, char* argv[])
     alloc_model_layer(model, 1, w0, b0, o1, e1);
     alloc_model_layer(model, 2, w1, b1, o2, e2);
 
-    initialize_model_weights(&model); 
     srand(time(NULL));
+    initialize_model_weights(&model); 
     
     for(int i = 0; i < epochs; i++)
     {
@@ -37,6 +37,8 @@ int main(int argc, char* argv[])
         mat_alloc_from_arr(input, 2, 1, input_arr); 
         mat_alloc_from_arr(output, 1, 1, output_arr);
 
+
+
         backward_pass(&output, &input, &model, debug);
     }
 
@@ -48,6 +50,7 @@ int main(int argc, char* argv[])
             double input_arr[2] = {(double)i, (double)j};
             Matrix input, result; 
             mat_alloc_from_arr(input, 2, 1, input_arr); 
+            mat_alloc(result, 1, 1, r);
 
             forward_pass(&result, &input, &model, debug);
             printf("Result for %d^%d: ", i, j); 

@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include "matrix.c"
 typedef struct HelloWorld
 {
     int* array;
