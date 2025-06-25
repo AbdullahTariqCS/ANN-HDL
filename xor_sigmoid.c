@@ -6,7 +6,7 @@ int main(int argc, char* argv[])
     int num_layers = 3; 
     int layers[] = {2, 2, 1};
     double learning_rate = 0.1; 
-    int epochs = 100; 
+    int epochs = 100000; 
     int debug = 0; 
 
     if (argc > 1) epochs = atoi(argv[1]);

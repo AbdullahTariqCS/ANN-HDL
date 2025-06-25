@@ -117,12 +117,14 @@ int initialize_model_weights(Model *model)
 
     return EXIT_SUCCESS;
 }
+
 int forward_pass(Matrix *output, Matrix *input, Model *model, int debug)
 {
+    if (debug) printf("\n########\n FORWARD_PASS \n#########\n");
 
     mat_copy_vals(&model->layer_output[0], input);
-    mat_normalize_inplace(&model->layer_output[0]);
-    mat_map_inplace(&model->layer_output[0], model->activate);
+    // mat_normalize_inplace(&model->layer_output[0]);
+    // mat_map_inplace(&model->layer_output[0], model->activate);
 
     for (int i = 0; i < model->num_layers; i++)
     {
@@ -158,10 +160,11 @@ double backward_pass(
     Model *model,
     int debug)
 {
+    if (debug) printf("\n########\n BACKWARD_PASS \n#########\n");
 
     mat_copy_vals(&model->layer_output[0], input);
-    mat_normalize_inplace(&model->layer_output[0]);
-    mat_map_inplace(&model->layer_output[0], model->activate);
+    // mat_normalize_inplace(&model->layer_output[0]);
+    // mat_map_inplace(&model->layer_output[0], model->activate);
 
     if (debug)
     {
@@ -211,21 +214,27 @@ double backward_pass(
         }
     }
 
-    // Matrix* error[model->num_layers+1];
-    // Matrix* neg_frontier = mat_scale(frontier[model->num_layers], -1, 0);
-    // error[model->num_layers] = mat_add(O, neg_frontier, 0);
     int last = model->num_layers;
     Matrix neg_layer_output;
     mat_alloc_from_matrix(neg_layer_output, model->layer_output[last], nlo);
 
-    mat_scale_in_place(&neg_layer_output, -1);
+
+    mat_scale_inplace(&neg_layer_output, -1);
     mat_add(&model->layer_error[last], output, &neg_layer_output);
+
+    // Matrix neg_output;
+    // mat_alloc_from_matrix(neg_output, (*output), nlo);
+
+
+    // mat_scale_inplace(&neg_output, -1);
+    // mat_add(&model->layer_error[last], &model->layer_output[last], &neg_output);
 
     if (debug)
     {
-        printf("\n neg_output = -neg_layer_output[%d: model->num_layers]\n", model->num_layers);
-        // printf("\n neg_output = -output\n");
+        printf("\n neg_layer_output = -layer_output[%d: model->num_layers]\n", model->num_layers);
         mat_print(&neg_layer_output);
+        // printf("neg_output = -output\n");
+        // mat_print(&neg_output);
 
         printf("error[%d: model->num_layer] = O + neg_layer_output\n", model->num_layers);
         mat_print(&model->layer_error[last]);
@@ -233,31 +242,23 @@ double backward_pass(
 
     for (int i = model->num_layers - 1; i >= 0; i--)
     {
-        // gradient = error[i+1] * lr * dsigmoid(output: frontier[i+1])
-        // d_weights[i] = gradient x input: frontier[i]
-
-        // Matrix* weights_t = mat_transpose(model->weights[i], 0);
-        // error[i] = mat_mul(weights_t, error[i+1]);
         Matrix weights_t;
         mat_alloc(weights_t, model->weights[i].columns, model->weights[i].rows, wt);
         mat_transpose(&weights_t, &model->weights[i]);
         mat_mul(&model->layer_error[i], &weights_t, &model->layer_error[i + 1]);
 
-        // Matrix* gradient = mat_map(frontier[i+1], dactivation, 0);
-        // mat_scalar_mul(gradient, error[i+1], 1);
-        // mat_scale(gradient, model->learning_rate, 1);
         Matrix gradient;
         mat_alloc_from_matrix(gradient, model->layer_output[i + 1], g);
         mat_map(&gradient, &model->layer_output[i + 1], model->dactivate);
         mat_haddard_inplace(&gradient, &model->layer_error[i + 1]);
-        mat_scale_in_place(&gradient, model->learning_rate);
+        mat_scale_inplace(&gradient, model->learning_rate);
         mat_add(&model->bias[i], &model->bias[i], &gradient);
 
         // Matrix* neg_gradient = mat_scale(gradient, -1, 0);
         // mat_add(model->bias[i], gradient, 1);
         // Matrix neg_gradient;
         // mat_alloc_from_matrix(neg_gradient, gradient, ng);
-        // mat_scale_in_place(&neg_gradient, -1);
+        // mat_scale_inplace(&neg_gradient, -1);
         // mat_add(&model->bias[i], &model->bias[i], &neg_gradient);
 
         // Matrix* frontier_t =  mat_transpose(frontier[i], 0);
@@ -268,7 +269,7 @@ double backward_pass(
 
         mat_transpose(&frontier_t, &model->layer_output[i]);
         mat_mul(&d_weights, &gradient, &frontier_t);
-        mat_scale_in_place(&d_weights, -1);
+        // mat_scale_inplace(&d_weights, -1);
 
         // mat_scale(d_weights, -1, 1);
         // mat_add(model->weights[i], d_weights, 1);

@@ -55,6 +55,7 @@ int mat_copy_vals(Matrix *O, Matrix *A)
 
 int mat_print(Matrix *A)
 {
+    // printf("Hello world");
     for (int i = 0; i < A->rows; i++)
     {
         for (int j = 0; j < A->columns; j++)
@@ -195,9 +196,21 @@ int mat_transpose(Matrix *O, Matrix *A)
         printf("Cannot store result of T(A) (%d, %d) in O (%d, %d)\n", A->columns, A->rows, O->rows, O->columns);
         return EXIT_FAILURE;
     }
-    for (int i = 0; i < A->rows; i++)
-        for (int j = 0; j < A->columns; j++)
-            O->matrix[i * O->columns + j] = A->matrix[j * A->rows + i];
+
+    // for (int i = 0; i < O->rows; i++)
+    //     for (int j = 0; j < O->columns; j++)
+    //         O->matrix[i * O->rows + j] = A->matrix[i * A->rows + j];
+
+    for (int i = 0; i < A->rows * A->columns; i++ )
+    {
+        int r = i % O->rows; 
+        int c = i / O->rows; 
+
+        O->matrix[r * O->columns + c] = A->matrix[i];
+        // printf("%d: (%d, %d) = %.0f [%d]\n", i, r, c, O->matrix[r * O->columns + c], r*O->columns + c);
+    }   
+    // printf("\n");
+
 
     return EXIT_SUCCESS;
 }
@@ -330,7 +343,7 @@ int mat_scale(Matrix *O, Matrix *A, double n)
     return EXIT_SUCCESS;
 }
 
-int mat_scale_in_place(Matrix *O, double n)
+int mat_scale_inplace(Matrix *O, double n)
 {
     for (int i = 0; i < O->columns * O->rows; i++)
         O->matrix[i] = O->matrix[i] * n;
@@ -355,18 +368,18 @@ int mat_normalize_inplace(Matrix *A)
 {
     int N = A->rows * A->columns;
     double mean = 0;
-    double variance = 0;
-    for (int i = 0; i < A->rows; i++)
-        for (int j = 0; j < A->columns; j++)
-            mean += A->matrix[i * A->columns + j];
+    double std_deviation = 0;
+    for (int i = 0; i < N; i++)
+        mean += A->matrix[i];
     mean /= N;
 
-    for (int i = 0; i < A->rows; i++)
-        for (int j = 0; j < A->columns; j++)
-            variance += pow(A->matrix[i * A->columns + j] - mean, 2);
-    variance = sqrt(variance / N);
+    for (int i = 0; i < N; i++)
+        std_deviation += pow(A->matrix[i] - mean, 2);
+    std_deviation = sqrt(std_deviation / N);
 
     mat_add_scalar(A, A, -mean);
-    if (variance != 0)
-        mat_scale(A, A, 1.0 / variance);
+    const double tolerance = 1e-12;
+
+    if (fabs(std_deviation) > tolerance)
+        mat_scale(A, A, 1 / std_deviation);
 }
